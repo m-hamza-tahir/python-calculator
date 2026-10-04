@@ -30,8 +30,7 @@ st.markdown("""
         overflow-wrap: anywhere; line-height: 1.2; }
     /* all keys: round pills like the reference */
     div[data-testid="stButton"] > button {
-        width: 100%; min-height: 56px; border-radius: 0; border: none;
-        clip-path: polygon(50% 0%, 100% 100%, 0% 100%); padding: 22px 0 0; box-shadow: none;
+        width: 100%; min-height: 56px; border-radius: 10px; border: none; box-shadow: none;
         font-size: 1.05rem; font-weight: 500; color: #1f2430; transition: .12s ease;
         box-shadow: 0 3px 8px rgba(30,40,80,.10);
     }
@@ -41,7 +40,7 @@ st.markdown("""
     [class*="st-key-pad"], [class*="st-key-sci"] { gap: 12px; }
     [class*="st-key-padrow"], [class*="st-key-scirow"] { gap: 12px; }
     /* scientific keys: tinted, taller to span the 5 keypad rows */
-    [class*="st-key-sci_"] button { background: #e8ebf4; min-height: 73px; padding-top: 30px; font-size: 1rem; }
+    [class*="st-key-sci_"] button { background: #e8ebf4; min-height: 73px; font-size: 1rem; }
     [class*="st-key-sci_"] button:hover { background: #dde2f0; color: #1f2430; }
     /* digit keys */
     [class*="st-key-num_"] button { background: #ffffff; font-size: 1.35rem; }
