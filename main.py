@@ -21,14 +21,20 @@ st.markdown("""
         box-shadow: 0 6px 22px rgba(30,40,80,.08); gap: 0;
     }
     .st-key-screen div[data-testid="stTextInput"] > div,
-    .st-key-screen div[data-testid="stTextInput"] > div > div { background: transparent; border: none; box-shadow: none; }
+    .st-key-screen div[data-testid="stTextInput"] > div > div {
+        background: transparent; border: none; box-shadow: none;
+    }
     .st-key-screen input {
         background: transparent !important; border: none !important; box-shadow: none !important;
         text-align: right; color: #8a90a0 !important; font-size: 1.15rem; padding: 4px 0;
     }
-    .display-result { color: #1f2430; font-size: 2.6rem; font-weight: 600; text-align: right;
-        overflow-wrap: anywhere; line-height: 1.2; }
-    /* all keys: round pills like the reference */
+    .display-result {
+        color: #1f2430; font-size: 2.6rem; font-weight: 600; text-align: right;
+        overflow-wrap: anywhere; line-height: 1.2;
+    }
+    /* Hide Streamlit's "Press Enter to apply" helper text */
+    div[data-testid="InputInstructions"] { display: none !important; }
+
     div[data-testid="stButton"] > button {
         width: 100%; min-height: 56px; border-radius: 10px; border: none; box-shadow: none;
         font-size: 1.05rem; font-weight: 500; color: #1f2430; transition: .12s ease;
@@ -36,13 +42,10 @@ st.markdown("""
     }
     div[data-testid="stButton"] { filter: drop-shadow(0 3px 4px rgba(30,40,80,.18)); }
     div[data-testid="stButton"] > button:active { transform: scale(.95); }
-    /* layout gaps */
     [class*="st-key-pad"], [class*="st-key-sci"] { gap: 12px; }
     [class*="st-key-padrow"], [class*="st-key-scirow"] { gap: 12px; }
-    /* scientific keys: tinted, taller to span the 5 keypad rows */
     [class*="st-key-sci_"] button { background: #e8ebf4; min-height: 73px; font-size: 1rem; }
     [class*="st-key-sci_"] button:hover { background: #dde2f0; color: #1f2430; }
-    /* digit keys */
     [class*="st-key-num_"] button { background: #ffffff; font-size: 1.35rem; }
     [class*="st-key-num_"] button:hover { background: #f1f3fa; color: #1f2430; }
     [class*="st-key-fn_"] button { background: #ffffff; }
@@ -54,7 +57,7 @@ st.markdown("""
     [class*="st-key-eq_"] button:hover { background: #4a7de0; color: #fff; }
 </style>
 """, unsafe_allow_html=True)
-
+# st.text("Hamza Tahir")
 # ---------- State ----------
 st.session_state.setdefault("expression", "")
 st.session_state.setdefault("result", "0")
@@ -77,8 +80,16 @@ UNARY_OPS = {
 }
 
 def evaluate(expression: str, angle_mode: str):
+    expression = expression.strip()
     expression = expression.replace("×", "*").replace("÷", "/").replace("^", "**")
     expression = expression.replace("π", "pi").replace("√", "sqrt")
+
+    # If the user has started a function such as cos(60, close the
+    # unmatched parentheses automatically before parsing the expression.
+    open_count = expression.count("(")
+    close_count = expression.count(")")
+    if open_count > close_count:
+        expression += ")" * (open_count - close_count)
 
     def sin(x):
         return math.sin(math.radians(x)) if angle_mode == "DEG" else math.sin(x)
@@ -181,33 +192,132 @@ def toggle_sign():
 
 def add_paren():
     e = st.session_state.expression
-    st.session_state.expression += ")" if e.count("(") > e.count(")") and e[-1:] not in "(+-×÷*/^%" else "("
+    if e.count("(") > e.count(")") and e[-1:] not in "(+-×÷*/^%":
+        st.session_state.expression += ")"
+    else:
+        st.session_state.expression += "("
 
 def calculate():
     expr = st.session_state.expression
     if not expr.strip():
         return
     try:
-        result = evaluate(expr, st.session_state.angle_mode)
-        st.session_state.result = result
-    except Exception as exc:
+        st.session_state.result = evaluate(expr, st.session_state.angle_mode)
+    except Exception:
         st.session_state.result = "Error"
 
+# ---------- Keyboard shortcut: Escape clears the calculator ----------
+# The listener is installed on the parent Streamlit document (not just this iframe).
+# It finds the real C button by its visible label and clicks it.
+st.components.v1.html("""
+<script>
+(function () {
+    try {
+        const parentDoc = window.parent.document;
+
+        if (parentDoc.__scientificCalculatorEscapeInstalled) return;
+        parentDoc.__scientificCalculatorEscapeInstalled = true;
+
+        parentDoc.addEventListener("keydown", function (event) {
+            if (event.key !== "Escape") return;
+
+            // Don't interfere with Escape in browser dialogs or other embedded frames.
+            event.preventDefault();
+            event.stopPropagation();
+
+            const buttons = Array.from(parentDoc.querySelectorAll("button"));
+            const clearButton = buttons.find(function (button) {
+                return button.innerText.trim() === "C";
+            });
+
+            if (clearButton) clearButton.click();
+        }, true);
+    } catch (error) {
+        // If the browser blocks parent-document access, the C button still works.
+    }
+})();
+</script>
+""", height=0)
+
+# ---------- Keyboard focus and shortcuts ----------
+# Focus the calculator input when the page opens. Escape clears using the
+# actual Streamlit C button. Enter is handled by the input's on_change callback.
+st.components.v1.html("""
+<script>
+(function () {
+    const parentWindow = window.parent;
+    const doc = parentWindow.document;
+
+    function findInput() {
+        return doc.querySelector('[data-testid="stTextInput"] input');
+    }
+
+    function focusCalculatorInput() {
+        const input = findInput();
+        if (input && doc.activeElement !== input) {
+            input.focus();
+            try {
+                const length = input.value.length;
+                input.setSelectionRange(length, length);
+            } catch (e) {}
+        }
+    }
+
+    // Streamlit may render the input just after this component, so retry briefly.
+    setTimeout(focusCalculatorInput, 150);
+    setTimeout(focusCalculatorInput, 500);
+    setTimeout(focusCalculatorInput, 1000);
+
+    if (doc.__scientificCalculatorKeyboardInstalled) return;
+    doc.__scientificCalculatorKeyboardInstalled = true;
+
+    // Clicking a calculator key causes Streamlit to rerender. Refocus the
+    // newly-rendered input afterward so the user can continue typing.
+    doc.addEventListener("click", function (event) {
+        const button = event.target && event.target.closest
+            ? event.target.closest("button") : null;
+        const main = doc.querySelector('[data-testid="stMain"]') || doc.body;
+        if (button && main.contains(button)) {
+            setTimeout(focusCalculatorInput, 180);
+            setTimeout(focusCalculatorInput, 400);
+        }
+    }, true);
+
+    doc.addEventListener("keydown", function (event) {
+        const input = findInput();
+        const targetIsCalculatorInput = input && event.target === input;
+
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            const buttons = Array.from(doc.querySelectorAll("button"));
+            const clearButton = buttons.find(
+                button => button.innerText.trim() === "C"
+            );
+            if (clearButton) clearButton.click();
+            setTimeout(focusCalculatorInput, 100);
+            return;
+        }
+
+    }, true);
+})();
+</script>
+""", height=0)
+
 # ---------- Screen: keyboard input + result output ----------
-# The input is bound to session_state.expression, so typing on the laptop
-# keyboard and pressing the on-screen keys edit the same value. Enter = calculate.
+# Pressing Enter in the input triggers calculate() through on_change.
 with st.container(key="screen"):
     st.text_input(
         "Input",
         key="expression",
         placeholder="0",
-        on_change=calculate,
         label_visibility="collapsed",
+        on_change=calculate,
     )
     result_text = html.escape(st.session_state.result)
     st.markdown(f'<div class="display-result">{result_text}</div>', unsafe_allow_html=True)
 
-# ---------- Keys (same layout as the reference UI) ----------
+# ---------- Keys ----------
 inv = st.session_state.inverse
 T = lambda t: (add_token, (t,))
 sci = [
@@ -244,4 +354,3 @@ with right:
             with col:
                 st.button(label, key=f"{kind}_{r}_{label}", use_container_width=True,
                           on_click=fn, args=args)
-
