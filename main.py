@@ -57,7 +57,7 @@ st.markdown("""
     [class*="st-key-eq_"] button:hover { background: #4a7de0; color: #fff; }
 </style>
 """, unsafe_allow_html=True)
-# st.text("Hamza Tahir")
+st.header("Hamza Tahir")
 # ---------- State ----------
 st.session_state.setdefault("expression", "")
 st.session_state.setdefault("result", "0")
